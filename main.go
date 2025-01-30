@@ -6,6 +6,8 @@ import (
 )
 
 func main() {
-	frontend.SetupGUI()
-	backend.SetupServer()
+	go frontend.SetupGUI()
+	go backend.SetupServer()
+
+	select {}
 }
