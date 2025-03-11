@@ -6,7 +6,8 @@ import (
 )
 
 func SetupServer() {
-	listener, err := net.Listen("tcp", "0.0.0.0:8080")
+	listener, err := net.Listen("tcp", "0.0.0.0:56867")
+
 	if err != nil {
 		fmt.Println("Error:", err)
 		return

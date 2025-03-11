@@ -3,11 +3,11 @@ package main
 import (
 	"network-interaction/backend"
 	"network-interaction/frontend"
+	"network-interaction/utils"
 )
 
 func main() {
-	go frontend.SetupGUI()
+	utils.LogError("Test")
 	go backend.SetupServer()
-
-	select {}
+	frontend.SetupGUI()
 }
