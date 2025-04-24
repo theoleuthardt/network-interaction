@@ -3,28 +3,30 @@ package backend
 import (
 	"fmt"
 	"net"
+	"network-interaction/utils"
+	_ "network-interaction/utils"
 )
 
 func SetupServer() {
 	listener, err := net.Listen("tcp", "0.0.0.0:56867")
 
 	if err != nil {
-		fmt.Println("Error:", err)
+		utils.LogError(err.Error())
 		return
 	}
 	defer func(listener net.Listener) {
 		err := listener.Close()
 		if err != nil {
-			fmt.Println("Error:", err)
+			utils.LogError(err.Error())
 		}
 	}(listener)
 
-	fmt.Println("Server is listening on port 8080")
+	utils.LogInfo("Server is listening on port 8080")
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Error:", err)
+			utils.LogError(err.Error())
 			continue
 		}
 
@@ -36,7 +38,7 @@ func handleClient(conn net.Conn) {
 	defer func(conn net.Conn) {
 		err := conn.Close()
 		if err != nil {
-			fmt.Println("Error:", err)
+			utils.LogError(err.Error())
 		}
 	}(conn)
 
