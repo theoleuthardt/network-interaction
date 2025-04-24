@@ -1,7 +1,6 @@
 package backend
 
 import (
-	"fmt"
 	"net"
 	"network-interaction/utils"
 	_ "network-interaction/utils"
@@ -42,6 +41,6 @@ func handleClient(conn net.Conn) {
 		}
 	}(conn)
 
-	fmt.Println("Client connected")
-	fmt.Println(conn.RemoteAddr().String())
+	utils.LogInfo("Client connected")
+	utils.LogInfo(conn.RemoteAddr().String())
 }
