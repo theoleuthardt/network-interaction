@@ -21,7 +21,7 @@ func SetupServer() {
 		}
 	}(listener)
 
-	utils.LogInfo("Server is listening on port 8080")
+	utils.LogInfo("Server is listening on port 56867")
 
 	for {
 		conn, err := listener.Accept()
