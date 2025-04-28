@@ -2,3 +2,5 @@ output
 .idea
 pkg
 main
+network-interaction
+queue_length.txt
