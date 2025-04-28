@@ -1,10 +1,8 @@
-
 # Network Interaction in Golang
 
-This project represents our study project I and is a desktop application with which two devices can be connected and 
-communicate with each other via the network. The focus will be on reader-writer problems and the resulting delays when 
+This project represents our study project I and is a desktop application with which two devices can be connected and
+communicate with each other via the network. The focus will be on reader-writer problems and the resulting delays when
 sending/receiving packets via a TCP connection.
-
 
 ## Screenshots
 
@@ -18,12 +16,19 @@ sending/receiving packets via a TCP connection.
 - Fullscreen mode
 - Cross platform
 
+## Prerequisites
+
+If you want to build the project yourself, install the following dependencies:
+
+```bash
+sudo apt install libvulkan-dev libxkbcommon-x11-dev libx11-xcb-dev libegl1-mesa-dev libwayland-dev libx11-dev libxcursor-dev libxfixes-dev pkg-config
+```
 
 ## Installation
 
-Download the executable for your operating system of choice! 
+Download the executable for your operating system of choice!
 After successfully downloading it just execute it on two devices and have fun!
-    
+
 ## Authors
 
 - [@Alexander Betke](https://www.github.com/alexinabox)
