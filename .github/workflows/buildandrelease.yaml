@@ -29,6 +29,9 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
+      - name: Install dependencies
+        run: go mod tidy
+
       - name: Build Go project
         run: |
           GOOS=${{ matrix.os == 'ubuntu-latest' && 'linux' || 'windows' }} GOARCH=amd64 go build -o network-interaction-${{ matrix.os }}-${{ matrix.go-version }} .
