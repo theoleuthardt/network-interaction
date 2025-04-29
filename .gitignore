@@ -4,3 +4,6 @@ pkg
 main
 network-interaction
 queue_length.txt
+dynamic_send.txt
+fast_send.txt
+slow_send.txt
