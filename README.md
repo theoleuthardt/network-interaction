@@ -29,6 +29,18 @@ sudo apt install libvulkan-dev libxkbcommon-x11-dev libx11-xcb-dev libegl1-mesa-
 Download the executable for your operating system of choice!
 After successfully downloading it just execute it on two devices and have fun!
 
+## Important Note
+
+The backend expects to receive **raw TCP packets**. It does **not** use a protocol like HTTP or MQTT. Instead, the payload of each TCP packet is parsed as a string and processed accordingly.
+
+You can manually send TCP packets to the backend using a tool like `nc` (Netcat). For example:
+
+```bash
+echo -n "fast" | nc 127.0.0.1 56867
+echo -n "dynamic" | nc 127.0.0.1 56867
+echo -n "slow" | nc 127.0.0.1 56867
+```
+
 ## Authors
 
 - [@Alexander Betke](https://www.github.com/alexinabox)
