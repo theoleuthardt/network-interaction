@@ -27,17 +27,18 @@ var (
 	darkMode                        = true
 	darkModeButton                  widget.Clickable
 	extraWindowButton               widget.Clickable
+	mainWindow                      *app.Window
 	extraWindow                     *app.Window
 )
 
 func SetupGUI() {
 	go func() {
-		window := new(app.Window)
-		window.Option(app.Title("Network Interaction"))
-		window.Option(app.Size(unit.Dp(600), unit.Dp(300)))
-		window.Option(app.MinSize(unit.Dp(600), unit.Dp(300)))
-		window.Option(app.MaxSize(unit.Dp(800), unit.Dp(350)))
-		err := run(window)
+		mainWindow := new(app.Window)
+		mainWindow.Option(app.Title("Network Interaction"))
+		mainWindow.Option(app.Size(unit.Dp(600), unit.Dp(300)))
+		mainWindow.Option(app.MinSize(unit.Dp(600), unit.Dp(300)))
+		mainWindow.Option(app.MaxSize(unit.Dp(800), unit.Dp(350)))
+		err := run(mainWindow)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -70,6 +71,10 @@ func run(window *app.Window) error {
 			if darkModeButton.Clicked(context) {
 				darkMode = !darkMode
 				theme = getTheme()
+				if extraWindow != nil {
+					extraWindow.Invalidate()
+				}
+
 			}
 
 			if extraWindowButton.Clicked(context) {
@@ -118,8 +123,8 @@ func openExtraWindow() {
 }
 
 func runExtraWindow(window *app.Window) error {
-	theme := getTheme()
 	var ops op.Ops
+	var localDarkModeButton widget.Clickable
 
 	for {
 		switch event := window.Event().(type) {
@@ -127,8 +132,20 @@ func runExtraWindow(window *app.Window) error {
 			return event.Err
 		case app.FrameEvent:
 			context := app.NewContext(&ops, event)
+			theme := getTheme()
+
+			if localDarkModeButton.Clicked(context) {
+				darkMode = !darkMode
+				theme = getTheme()
+				if mainWindow != nil {
+					mainWindow.Invalidate()
+				}
+
+			}
+
 			layoutExtraWindow(context, theme)
 			event.Frame(context.Ops)
+
 		}
 	}
 }
@@ -136,19 +153,25 @@ func runExtraWindow(window *app.Window) error {
 func layoutExtraWindow(context layout.Context, theme *material.Theme) layout.Dimensions {
 	paint.Fill(context.Ops, theme.Palette.Bg)
 
-	return layout.Center.Layout(context, func(context layout.Context) layout.Dimensions {
-		inset := layout.UniformInset(unit.Dp(20))
-		return inset.Layout(context, func(context layout.Context) layout.Dimensions {
-			return layout.Flex{
-				Axis: layout.Vertical,
-			}.Layout(context,
-				layout.Rigid(material.H5(theme, "Network Discovery Manager").Layout),
-				layout.Rigid(layout.Spacer{Height: unit.Dp(16)}.Layout),
-				layout.Rigid(material.Body1(theme, "You can connect and send tcp packages here!").Layout),
-				layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-				layout.Rigid(material.Body2(theme, "TCP is so cool!").Layout),
-			)
-		})
+	return layout.UniformInset(unit.Dp(20)).Layout(context, func(context layout.Context) layout.Dimensions {
+		return layout.Flex{
+			Axis: layout.Vertical,
+		}.Layout(context,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{
+					Axis: layout.Horizontal,
+				}.Layout(gtx,
+					layout.Rigid(material.H5(theme, "Network Discovery Manager").Layout),
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						return layout.Dimensions{Size: gtx.Constraints.Min}
+					}),
+				)
+			}),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(16)}.Layout),
+			layout.Rigid(material.Body1(theme, "You can connect and send tcp packages here!").Layout),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
+			layout.Rigid(material.Body2(theme, "TCP is so cool!").Layout),
+		)
 	})
 }
 
