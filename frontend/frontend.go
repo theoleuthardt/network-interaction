@@ -105,8 +105,10 @@ func openExtraWindow() {
 
 	go func() {
 		extraWindow = new(app.Window)
-		extraWindow.Option(app.Title("Extra Window"))
+		extraWindow.Option(app.Title("Network Discovery"))
 		extraWindow.Option(app.Size(unit.Dp(400), unit.Dp(300)))
+		extraWindow.Option(app.MinSize(unit.Dp(400), unit.Dp(300)))
+		extraWindow.Option(app.MaxSize(unit.Dp(800), unit.Dp(600)))
 		err := runExtraWindow(extraWindow)
 		if err != nil {
 			log.Printf("Extra window error: %v", err)
