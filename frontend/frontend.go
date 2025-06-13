@@ -1,14 +1,14 @@
 package frontend
 
 import (
+	"encoding/json"
 	"fmt"
-	"golang.org/x/exp/shiny/materialdesign/icons"
 	"image"
 	"image/color"
 	"log"
 	"os"
-	"strconv"
-	"time"
+
+	"golang.org/x/exp/shiny/materialdesign/icons"
 
 	"network-interaction/utils"
 
@@ -29,9 +29,19 @@ var (
 	extraWindowButton               widget.Clickable
 	mainWindow                      *app.Window
 	extraWindow                     *app.Window
+	messageChannel                  chan string
 )
 
-func SetupGUI() {
+// QueueState represents the state of all queues received from backend
+type QueueState struct {
+	FastQueue    uint `json:"fast"`
+	DynamicQueue uint `json:"dynamic"`
+	SlowQueue    uint `json:"slow"`
+}
+
+func SetupGUI(msgChan chan string) {
+	messageChannel = msgChan
+
 	go func() {
 		mainWindow := new(app.Window)
 		mainWindow.Option(app.Title("Network Interaction"))
@@ -52,12 +62,21 @@ func run(window *app.Window) error {
 	var ops op.Ops
 
 	go func() {
-		for {
-			fastSend = readUint("fast_send.txt")
-			dynamicSend = readUint("dynamic_send.txt")
-			slowSend = readUint("slow_send.txt")
+		for msg := range messageChannel {
+			// Parse the message as JSON
+			var state QueueState
+			err := json.Unmarshal([]byte(msg), &state)
+			if err != nil {
+				utils.LogError("Failed to parse queue state: " + err.Error())
+				continue
+			}
+
+			// Update the UI values
+			fastSend = state.FastQueue
+			dynamicSend = state.DynamicQueue
+			slowSend = state.SlowQueue
+
 			window.Invalidate()
-			time.Sleep(500 * time.Millisecond)
 		}
 	}()
 
@@ -272,7 +291,7 @@ func drawVerticalQueueBar(th *material.Theme, label string, value uint) layout.F
 func drawVerticalBar(gtx layout.Context, value uint) layout.Dimensions {
 	barWidth := unit.Dp(40)
 	barHeight := unit.Dp(150)
-	maxValue := uint(20)
+	maxValue := uint(100)
 
 	actualWidth := gtx.Dp(barWidth)
 	actualHeight := gtx.Dp(barHeight)
@@ -298,9 +317,9 @@ func drawVerticalBar(gtx layout.Context, value uint) layout.Dimensions {
 
 	if fillHeight > 0 {
 		var fillColor color.NRGBA
-		if value <= 7 {
+		if value <= maxValue/3 {
 			fillColor = color.NRGBA{R: 34, G: 197, B: 94, A: 255}
-		} else if value <= 14 {
+		} else if value <= maxValue*2/3 {
 			fillColor = color.NRGBA{R: 251, G: 191, B: 36, A: 255}
 		} else {
 			fillColor = color.NRGBA{R: 239, G: 68, B: 68, A: 255}
@@ -317,17 +336,4 @@ func drawVerticalBar(gtx layout.Context, value uint) layout.Dimensions {
 	}
 
 	return layout.Dimensions{Size: image.Pt(actualWidth, actualHeight)}
-}
-
-func readUint(filename string) uint {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return 0
-	}
-	n, err := strconv.Atoi(string(data))
-	if err != nil {
-		return 0
-	}
-	utils.LogInfo(fmt.Sprintf("[FRONTEND] %s: %d", filename, n))
-	return uint(n)
 }
