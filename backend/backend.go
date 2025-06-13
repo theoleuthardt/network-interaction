@@ -3,7 +3,6 @@ package backend
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net"
 	"network-interaction/utils"
 	"strings"
@@ -28,102 +27,32 @@ type QueueState struct {
 // SetupServer starts the server and peer discovery
 func SetupServer(messageChan chan string) {
 	// Find available port for server
-	serverPort = findPort()
-
+	serverPort = utils.FindAvailablePort(50500, 50600)
 	utils.LogInfo(fmt.Sprintf("Starting server on port %d", serverPort))
 
-	// Start TCP server in its own goroutine
+	// Start TCP server
 	go startTCPServer(messageChan)
 
-	// Start peer discovery and communication
-	discoverPeers()
-
-	utils.LogInfo("Peer discovery complete, connected to: " + peerAddress)
-
-	// Send messages in regular intervals
-	go shitFuck()
-
-	// Send initial state and start queue countdown
-	sendQueueState(messageChan)
-	go countdownQueues(messageChan)
-	go sendQueueStatePeriodically(messageChan, time.Duration(100)) //Every 100ms
-}
-
-// Find an available port
-func findPort() int {
-	for port := 50500; port < 50600; port++ {
-		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-		if err == nil {
-			listener.Close()
-			return port
-		}
-	}
-	return 50600
-}
-
-// Discover other peers by scanning TCP ports
-func discoverPeers() {
-	for {
-		if peerAddress != "" {
-			utils.LogInfo("Already connected to peer: " + peerAddress)
-			return
-		}
+	// Start peer discovery
+	func() {
+		portRange := make([]int, 0, 100)
 		for port := 50500; port < 50600; port++ {
-			// Skip our own port
-			if port == serverPort {
-				continue
-			}
-
-			// Try localhost first (most common case)
-			if tryConnectToPeer("127.0.0.1", port) {
-				return
-			}
+			portRange = append(portRange, port)
 		}
-		utils.LogInfo("No peers found, retrying in 10 seconds...")
-		time.Sleep(10 * time.Second)
-	}
+		peerAddress = utils.DiscoverPeers(serverPort, portRange, func() string { return peerAddress })
+		utils.LogInfo("Peer discovery complete, connected to: " + peerAddress)
+	}()
+
+	// Start message senders
+	utils.StartMessageSenders(func() string { return peerAddress })
+
+	// Start queue management
+	sendQueueState(messageChan)
+	go countdownQueues()
+	go sendQueueStatePeriodically(messageChan, 100*time.Millisecond)
 }
 
-// Try to connect to a potential peer
-func tryConnectToPeer(ip string, port int) bool {
-	address := net.JoinHostPort(ip, fmt.Sprintf("%d", port))
-
-	conn, err := net.DialTimeout("tcp", address, 1*time.Second)
-	if err != nil {
-		return false
-	}
-	defer conn.Close()
-
-	// Send discovery message
-	_, err = conn.Write([]byte("DISCOVER " + fmt.Sprintf("%d", serverPort)))
-	if err != nil {
-		return false
-	}
-
-	// Read response
-	buffer := make([]byte, 1024)
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	n, err := conn.Read(buffer)
-	if err != nil {
-		return false
-	}
-
-	response := string(buffer[:n])
-	if response == "PEER_RESPONSE" {
-		addPeer(address)
-		return true
-	}
-
-	return false
-}
-
-// Add peer address (only one allowed)
-func addPeer(address string) {
-	peerAddress = address
-	utils.LogInfo("Found peer: " + address)
-}
-
-// Start TCP server in its own goroutine
+// Start TCP server
 func startTCPServer(messageChan chan string) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", serverPort))
 	if err != nil {
@@ -132,7 +61,6 @@ func startTCPServer(messageChan chan string) {
 	}
 	defer listener.Close()
 
-	// Accept connections
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -156,29 +84,22 @@ func handleConnection(conn net.Conn, messageChan chan string) {
 
 	// Handle discovery requests
 	if strings.HasPrefix(message, "DISCOVER ") {
-		//ignore if peerAdress is already set
 		if peerAddress != "" {
-			return
+			return // Already connected
 		}
 
 		conn.Write([]byte("PEER_RESPONSE"))
 
-		// If we don't have a peer yet, save this address with the provided port
-		// Extract port from the DISCOVER message
-		parts := strings.Split(message, " ")
-		if len(parts) >= 2 {
-			port := parts[1]
-			// Get the IP from the remote address and combine with the provided port
-			remoteAddr := conn.RemoteAddr().String()
-			ip := strings.Split(remoteAddr, ":")[0]
+		// Extract port and set peer address
+		if port := utils.ExtractPortFromDiscoverMessage(message); port != "" {
+			ip := utils.GetIPFromRemoteAddr(conn.RemoteAddr().String())
 			peerAddress = net.JoinHostPort(ip, port)
 			utils.LogInfo("Accepted peer: " + peerAddress)
 		}
-
 		return
 	}
 
-	// Regular message handling - update queues based on message
+	// Update queues based on message content
 	if strings.Contains(message, "fast") {
 		fastQueue++
 	} else if strings.Contains(message, "dynamic") {
@@ -189,7 +110,7 @@ func handleConnection(conn net.Conn, messageChan chan string) {
 }
 
 // Countdown queue values every second
-func countdownQueues(messageChan chan string) {
+func countdownQueues() {
 	for {
 		time.Sleep(1 * time.Second)
 
@@ -237,81 +158,4 @@ func sendQueueState(messageChan chan string) {
 	}
 
 	messageChan <- string(data)
-}
-
-// Send a message to the connected peer
-func sendMessageToPeer(message string) {
-	if peerAddress == "" {
-		return
-	}
-
-	conn, err := net.DialTimeout("tcp", peerAddress, 1*time.Second)
-	if err != nil {
-		utils.LogError("Failed to connect to peer: " + err.Error())
-		return
-	}
-	defer conn.Close()
-
-	_, err = conn.Write([]byte(message))
-	if err != nil {
-		utils.LogError("Failed to send message to peer: " + err.Error())
-	}
-}
-
-func shitFuck() {
-	// Send fast messages with variation around 200ms base interval
-	go func() {
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-		for {
-			// Base interval 200ms with ±50ms variation (150ms to 250ms)
-			baseInterval := 200 * time.Millisecond
-			variation := time.Duration(r.Intn(201)-100) * time.Millisecond // -50ms to +50ms
-			interval := baseInterval + variation
-
-			time.Sleep(interval)
-			if peerAddress != "" {
-				sendMessageToPeer("fast message")
-			}
-		}
-	}()
-
-	// Send dynamic messages with configurable chance of short vs long intervals
-	go func() {
-		// Seed the random number generator
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-		for {
-			shortIntervalChance := 0.8
-
-			var interval time.Duration
-			if r.Float64() < shortIntervalChance {
-				interval = 50 * time.Millisecond // Short interval
-			} else {
-				interval = 3000 * time.Millisecond // Long interval
-			}
-
-			time.Sleep(interval)
-			if peerAddress != "" {
-				sendMessageToPeer("dynamic message")
-			}
-		}
-	}()
-
-	// Send slow messages with variation around 1 second base interval
-	go func() {
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-		for {
-			// Base interval 1000ms with ±200ms variation (800ms to 1200ms)
-			baseInterval := 1000 * time.Millisecond
-			variation := time.Duration(r.Intn(401)-200) * time.Millisecond // -200ms to +200ms
-			interval := baseInterval + variation
-
-			time.Sleep(interval)
-			if peerAddress != "" {
-				sendMessageToPeer("slow message")
-			}
-		}
-	}()
 }
