@@ -18,7 +18,7 @@ sending/receiving packets via a TCP connection.
 - Connection status LED
 - Dark mode
 - Fullscreen mode
-- Cross platform
+- Cross-platform
 
 ## Screenshots
 ### Disconnected Status
