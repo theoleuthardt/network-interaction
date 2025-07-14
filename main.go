@@ -6,6 +6,8 @@ import (
 )
 
 func main() {
-	go backend.SetupServer()
-	frontend.SetupGUI()
+	messageChan := make(chan string)
+
+	go backend.SetupServer(messageChan)
+	frontend.SetupGUI(messageChan)
 }
