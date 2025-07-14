@@ -88,10 +88,15 @@ func initializeUIElements() {
 
 	fastBar = widget.NewProgressBar()
 	fastBar.SetValue(0)
+	fastBar.TextFormatter = func() string { return "" }
+
 	dynamicBar = widget.NewProgressBar()
 	dynamicBar.SetValue(0)
+	dynamicBar.TextFormatter = func() string { return "" }
+
 	slowBar = widget.NewProgressBar()
 	slowBar.SetValue(0)
+	slowBar.TextFormatter = func() string { return "" }
 
 	connectionLED = widget.NewLabel("●")
 	connectionLED.TextStyle = fyne.TextStyle{Bold: true}
