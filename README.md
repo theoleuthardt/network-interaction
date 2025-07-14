@@ -4,17 +4,29 @@ This project represents our study project I and is a desktop application with wh
 communicate with each other via the network. The focus will be on reader-writer problems and the resulting delays when
 sending/receiving packets via a TCP connection.
 
-## Screenshots
-
-
-
-
 ## Features
 
-- Live Timing Diagram of TCP Package Delay
 - Network Connection of two devices
+- Automatic detection of the other device on local network
+- Automatic connection trying to connect to the other device
+- Sending and receiving of packets automatically
+- Sending of packets with different delays
+  - Fast (0ms)
+  - Dynamic (random between 0 and 1000ms)
+  - Slow (1000ms)
+- Visualization of received packets
+- Connection status LED
+- Dark mode
 - Fullscreen mode
-- Cross platform
+- Cross-platform
+
+## Screenshots
+### Disconnected Status
+<img src="./pictures/network-interaction-disconnected.png" alt="Screenshot of the app in disconnected status" width="300"/>
+
+### Connected Status
+<img src="./pictures/network-interaction-connected.png" alt="Screenshot of the app in connected status" width="600"/>
+
 
 ## Prerequisites
 
