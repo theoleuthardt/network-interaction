@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/layout"
+	"image/color"
 	"log"
 	"os"
 	"sync"
@@ -28,7 +30,8 @@ var (
 
 	fastLabel, dynamicLabel, slowLabel *widget.Label
 	fastBar, dynamicBar, slowBar       *widget.ProgressBar
-	connectionLED                      *widget.Label
+	connectionLED                      *fyne.Container
+	ledCircle                          *canvas.Circle
 	darkModeButton                     *widget.Button
 	window                             fyne.App
 	mainWindow                         fyne.Window
@@ -98,10 +101,11 @@ func initializeUIElements() {
 	slowBar.SetValue(0)
 	slowBar.TextFormatter = func() string { return "" }
 
-	connectionLED = widget.NewLabel("●")
-	connectionLED.TextStyle = fyne.TextStyle{Bold: true}
-	connectionLED.Alignment = fyne.TextAlignCenter
-	updateLEDColor(false)
+	ledCircle = canvas.NewCircle(color.RGBA{R: 255, A: 255})
+	ledCircle.Resize(fyne.NewSize(18, 18))
+	ledCircle.Move(fyne.NewPos(5, 8))
+	connectionLED = container.NewWithoutLayout(ledCircle)
+	connectionLED.Resize(fyne.NewSize(30, 30))
 
 	darkModeButton = widget.NewButton("🌙", toggleDarkMode)
 	if !darkMode {
@@ -111,11 +115,11 @@ func initializeUIElements() {
 
 func updateLEDColor(connected bool) {
 	if connected {
-		connectionLED.SetText("🟢")
+		ledCircle.FillColor = color.RGBA{G: 255, A: 255}
 	} else {
-		connectionLED.SetText("🔴")
+		ledCircle.FillColor = color.RGBA{R: 255, A: 255}
 	}
-	connectionLED.Refresh()
+	ledCircle.Refresh()
 }
 
 func createLayout() *fyne.Container {
@@ -123,17 +127,17 @@ func createLayout() *fyne.Container {
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.Resize(fyne.NewSize(200, 50))
 
-	ledContainer := container.NewBorder(nil, nil, nil, nil, connectionLED)
-	ledContainer.Resize(fyne.NewSize(30, 40))
+	sizedLEDContainer := container.New(layout.NewGridWrapLayout(fyne.NewSize(30, 30)), connectionLED)
 
 	headerRight := container.NewHBox(
 		widget.NewLabel("Connection Status:"),
-		ledContainer,
+		sizedLEDContainer,
 		widget.NewSeparator(),
 		darkModeButton,
 	)
 
-	header := container.NewBorder(nil, nil, title, headerRight)
+	headerLeft := container.NewHBox(title)
+	header := container.NewBorder(nil, nil, headerLeft, headerRight)
 	queuesContainer := container.NewHBox(
 		layout.NewSpacer(),
 		container.NewVBox(
