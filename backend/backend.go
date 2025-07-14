@@ -51,10 +51,37 @@ func SetupServer(messageChan chan string) {
 	// Start message senders
 	utils.StartMessageSenders(func() string { return peerAddress })
 
+	// Start connection monitoring
+	go monitorConnection()
+
 	// Start queue management
 	sendQueueState(messageChan)
 	go countdownQueues()
 	go sendQueueStatePeriodically(messageChan, 100*time.Millisecond)
+}
+
+func monitorConnection() {
+	for {
+		time.Sleep(1 * time.Second)
+
+		if peerAddress != "" {
+			// Try to connect to peer to check if it's still alive
+			conn, err := net.DialTimeout("tcp", peerAddress, 2*time.Second)
+			if err != nil {
+				if connected {
+					utils.LogInfo("Peer connection lost: " + peerAddress)
+					connected = false
+					peerAddress = ""
+				}
+			} else {
+				conn.Close()
+				if !connected {
+					utils.LogInfo("Peer connection restored: " + peerAddress)
+					connected = true
+				}
+			}
+		}
+	}
 }
 
 // Start TCP server
