@@ -22,10 +22,10 @@ sending/receiving packets via a TCP connection.
 
 ## Screenshots
 ### Disconnected Status
-<img src="./pictures/network-interaction-disconnected.png" alt="network-interaction-disconnected" width="300"/>
+<img src="./pictures/network-interaction-disconnected.png" alt="Screenshot of the app in disconnected status" width="300"/>
 
 ### Connected Status
-<img src="./pictures/network-interaction-connected.png" alt="network-interaction-connected" width="600"/>
+<img src="./pictures/network-interaction-connected.png" alt="Screenshot of the app in connected status" width="600"/>
 
 
 ## Prerequisites
