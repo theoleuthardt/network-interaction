@@ -16,12 +16,14 @@ var (
 
 	serverPort  int
 	peerAddress string
+	connected   = false
 )
 
 type QueueState struct {
 	FastQueue    uint `json:"fast"`
 	DynamicQueue uint `json:"dynamic"`
 	SlowQueue    uint `json:"slow"`
+	Connected    bool `json:"connected"`
 }
 
 // SetupServer starts the server and peer discovery
@@ -40,6 +42,9 @@ func SetupServer(messageChan chan string) {
 			portRange = append(portRange, port)
 		}
 		peerAddress = utils.DiscoverPeers(serverPort, portRange, func() string { return peerAddress })
+		if peerAddress != "" {
+			connected = true
+		}
 		utils.LogInfo("Peer discovery complete, connected to: " + peerAddress)
 	}()
 
@@ -94,6 +99,7 @@ func handleConnection(conn net.Conn, messageChan chan string) {
 		if port := utils.ExtractPortFromDiscoverMessage(message); port != "" {
 			ip := utils.GetIPFromRemoteAddr(conn.RemoteAddr().String())
 			peerAddress = net.JoinHostPort(ip, port)
+			connected = true
 			utils.LogInfo("Accepted peer: " + peerAddress)
 		}
 		return
@@ -150,6 +156,7 @@ func sendQueueState(messageChan chan string) {
 		FastQueue:    fastQueue,
 		DynamicQueue: dynamicQueue,
 		SlowQueue:    slowQueue,
+		Connected:    connected,
 	}
 
 	data, err := json.Marshal(state)
