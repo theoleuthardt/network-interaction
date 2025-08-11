@@ -37,14 +37,6 @@ jobs:
             libegl1-mesa-dev libwayland-dev libx11-dev libxcursor-dev \
             libxfixes-dev pkg-config
 
-      - name: Install dependencies (Windows only)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          choco install msys2 --no-progress
-          refreshenv
-          C:\tools\msys64\usr\bin\bash -lc "pacman -S --noconfirm mingw-w64-x86_64-opengl"
-
       - name: Install Go dependencies
         run: go mod tidy
 
@@ -67,12 +59,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Download artifacts
+      - name: Download artifacts (Linux)
         uses: actions/download-artifact@v4
         with:
           name: ubuntu-latest
           path: .
-      - name: Download Windows artifacts
+      - name: Download artifacts (Windows)
         uses: actions/download-artifact@v4
         with:
           name: windows-latest
