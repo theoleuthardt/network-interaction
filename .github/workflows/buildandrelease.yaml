@@ -14,11 +14,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
         go-version: [1.24]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Check out repository
@@ -33,14 +33,17 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt update
-          sudo apt install -y libvulkan-dev libxkbcommon-x11-dev libx11-xcb-dev libegl1-mesa-dev libwayland-dev libx11-dev libxcursor-dev libxfixes-dev pkg-config
+          sudo apt install -y libvulkan-dev libxkbcommon-x11-dev libx11-xcb-dev \
+            libegl1-mesa-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxfixes-dev pkg-config libxcursor-dev libxinerama-dev libxrandr-dev libxi-dev libgl-dev libxxf86vm-dev
 
       - name: Install Go dependencies
         run: go mod tidy
 
       - name: Build Go project
-        run: |
-          GOOS=${{ matrix.os == 'ubuntu-latest' && 'linux' || 'windows' }} GOARCH=amd64 go build -o network-interaction-${{ matrix.os }}-${{ matrix.go-version }} .
+        env:
+          CGO_ENABLED: 1
+        run: go build -o network-interaction-${{ matrix.os }}-${{ matrix.go-version }} .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -56,11 +59,22 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Download artifacts (Linux)
+        uses: actions/download-artifact@v4
+        with:
+          name: ubuntu-latest
+          path: .
+      - name: Download artifacts (Windows)
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-latest
+          path: .
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            network-interaction-windows-1.20
-            network-interaction-linux-1.20
+            network-interaction-windows-latest-1.24
+            network-interaction-ubuntu-latest-1.24
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
