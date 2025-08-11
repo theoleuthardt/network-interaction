@@ -35,17 +35,12 @@ jobs:
           sudo apt update
           sudo apt install -y libvulkan-dev libxkbcommon-x11-dev libx11-xcb-dev \
             libegl1-mesa-dev libwayland-dev libx11-dev libxcursor-dev \
-            libxfixes-dev pkg-config
+            libxfixes-dev pkg-config libxcursor-dev libxinerama-dev libxrandr-dev libxi-dev libgl-dev libxxf86vm-dev
 
       - name: Install Go dependencies
         run: go mod tidy
 
-      - name: Build Go project (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: go build -o network-interaction-${{ matrix.os }}-${{ matrix.go-version }} .
-
-      - name: Build Go project (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Build Go project
         env:
           CGO_ENABLED: 1
         run: go build -o network-interaction-${{ matrix.os }}-${{ matrix.go-version }} .
