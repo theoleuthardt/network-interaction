@@ -35,13 +35,22 @@ jobs:
           sudo apt update
           sudo apt install -y libvulkan-dev libxkbcommon-x11-dev libx11-xcb-dev libegl1-mesa-dev libwayland-dev libx11-dev libxcursor-dev libxfixes-dev pkg-config
 
+      - name: Install dependencies (Windows only)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install msys2
+          refreshenv
+          C:\tools\msys64\usr\bin\bash -lc "pacman -S --noconfirm mingw-w64-x86_64-opengl"
+
       - name: Install Go dependencies
         run: go mod tidy
 
       - name: Build Go project
         run: |
           GOOS=${{ matrix.os == 'ubuntu-latest' && 'linux' || 'windows' }} GOARCH=amd64 go build -o network-interaction-${{ matrix.os }}-${{ matrix.go-version }} .
-
+        env:
+          CGO_ENABLED: 1
+          
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
