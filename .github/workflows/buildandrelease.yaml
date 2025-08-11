@@ -40,7 +40,12 @@ jobs:
       - name: Install Go dependencies
         run: go mod tidy
 
-      - name: Build Go project
+      - name: Build Go project (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: go build -o network-interaction-${{ matrix.os }}-${{ matrix.go-version }} .
+
+      - name: Build Go project (Windows)
+        if: matrix.os == 'windows-latest'
         env:
           CGO_ENABLED: 1
         run: go build -o network-interaction-${{ matrix.os }}-${{ matrix.go-version }} .
