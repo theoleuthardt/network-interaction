@@ -124,20 +124,18 @@ func DiscoverPeers(serverPort int, portRange []int, getPeerAddress func() string
 
 		// Scan all ports concurrently
 		for _, port := range portRange {
-			if port == serverPort {
-				continue
-			}
-
 			go func(p int) {
-				// Try localhost first
-				if success, addr := TryConnectToPeer("127.0.0.1", p, serverPort); success {
-					found <- struct {
-						success bool
-						address string
-					}{true, addr}
-					return
+				// Skip localhost check only if p == serverPort
+				if p != serverPort {
+					if success, addr := TryConnectToPeer("127.0.0.1", p, serverPort); success {
+						found <- struct {
+							success bool
+							address string
+						}{true, addr}
+						return
+					}
 				}
-				// Try subnet if localhost fails
+				// Always try subnet scanning (external discovery)
 				if localIP != "" {
 					success, addr := ScanSubnetForPeer(localIP, p, serverPort)
 					found <- struct {
