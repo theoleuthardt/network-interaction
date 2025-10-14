@@ -3,7 +3,8 @@ package utils
 import (
 	"fmt"
 	"net"
-	"strings"
+	"strconv"
+	"sync"
 	"time"
 )
 
@@ -36,20 +37,18 @@ func FindAvailablePort(startPort, endPort int) int {
 	return endPort
 }
 
-// TryConnectToPeer attempts to connect to a peer and send discovery message
-func TryConnectToPeer(ip string, port, serverPort int) (bool, string) {
-	address := net.JoinHostPort(ip, fmt.Sprintf("%d", port))
-
-	conn, err := net.DialTimeout("tcp", address, 1*time.Second)
+// IsPeerDiscoverable attempts to connect to a peer and send discovery message
+func IsPeerDiscoverable(peer string) bool {
+	conn, err := net.DialTimeout("tcp", peer, 1*time.Second)
 	if err != nil {
-		return false, ""
+		return false
 	}
 	defer conn.Close()
 
 	// Send discovery message
-	_, err = conn.Write([]byte("DISCOVER " + fmt.Sprintf("%d", serverPort)))
+	_, err = conn.Write([]byte("DISCOVER_SYN"))
 	if err != nil {
-		return false, ""
+		return false
 	}
 
 	// Read response
@@ -57,133 +56,106 @@ func TryConnectToPeer(ip string, port, serverPort int) (bool, string) {
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	n, err := conn.Read(buffer)
 	if err != nil {
-		return false, ""
+		return false
 	}
 
-	if string(buffer[:n]) == "PEER_RESPONSE" {
-		return true, address
-	}
-	return false, ""
+	return string(buffer[:n]) == "DISCOVER_ACK"
 }
 
 // ScanSubnetForPeer scans all IPs in a /24 subnet for a peer on given port
-func ScanSubnetForPeer(localIP string, port, serverPort int) (bool, string) {
-	ip := net.ParseIP(localIP)
-	if ip == nil {
-		return false, ""
-	}
+func ScanSubnetForPeer(localIP string, port int) []string {
+	var (
+		discoveredPeers []string
+		ip              = net.ParseIP(localIP).To4()
+		baseIP          = fmt.Sprintf("%d.%d.%d", ip[0], ip[1], ip[2])
+		mu              sync.Mutex
+		wg              sync.WaitGroup
+	)
 
-	ipv4 := ip.To4()
-	if ipv4 == nil {
-		return false, ""
-	}
-
-	baseIP := fmt.Sprintf("%d.%d.%d", ipv4[0], ipv4[1], ipv4[2])
-	found := make(chan struct {
-		success bool
-		address string
-	}, 254)
-
-	// Scan all IPs concurrently
 	for i := 1; i <= 254; i++ {
+		wg.Add(1)
 		go func(hostNum int) {
+			defer wg.Done()
+
 			targetIP := fmt.Sprintf("%s.%d", baseIP, hostNum)
-			if targetIP != localIP {
-				success, addr := TryConnectToPeer(targetIP, port, serverPort)
-				found <- struct {
-					success bool
-					address string
-				}{success, addr}
-			} else {
-				found <- struct {
-					success bool
-					address string
-				}{false, ""}
+			if targetIP == localIP {
+				return
+			}
+
+			peer := net.JoinHostPort(targetIP, fmt.Sprintf("%d", port))
+			if IsPeerDiscoverable(peer) {
+				mu.Lock()
+				discoveredPeers = append(discoveredPeers, peer)
+				mu.Unlock()
 			}
 		}(i)
 	}
 
-	// Check results
-	for i := 0; i < 254; i++ {
-		result := <-found
-		if result.success {
-			return true, result.address
-		}
-	}
-	return false, ""
+	wg.Wait()
+	return discoveredPeers
 }
 
 // DiscoverPeers scans for peers on localhost and subnet
-func DiscoverPeers(serverPort int, portRange []int, getPeerAddress func() string) string {
-	for {
-		localIP := GetLocalIP()
-		found := make(chan struct {
-			success bool
-			address string
-		}, len(portRange))
+func DiscoverPeers(serverPort int, portRange []int) []string {
+	var (
+		discoveredPeers []string
+		localIP         = GetLocalIP()
+		mu              sync.Mutex
+		wg              sync.WaitGroup
+	)
 
-		// Scan all ports concurrently
-		for _, port := range portRange {
-			go func(p int) {
-				// Skip localhost check only if p == serverPort
-				if p != serverPort {
-					if success, addr := TryConnectToPeer("127.0.0.1", p, serverPort); success {
-						found <- struct {
-							success bool
-							address string
-						}{true, addr}
-						return
-					}
-				}
-				// Always try subnet scanning (external discovery)
-				if localIP != "" {
-					success, addr := ScanSubnetForPeer(localIP, p, serverPort)
-					found <- struct {
-						success bool
-						address string
-					}{success, addr}
-					return
-				}
-				found <- struct {
-					success bool
-					address string
-				}{false, ""}
-			}(port)
-		}
+	for _, port := range portRange {
+		wg.Add(1)
+		go func(p int) {
+			defer wg.Done()
 
-		// Check if any port found a peer
-		for i := 0; i < len(portRange)-1; i++ { // minus our own port
-			result := <-found
-			if result.success {
-				return result.address
+			if p == serverPort {
+				return
 			}
-		}
 
-		LogInfo("No peers found, retrying in 10 seconds...")
-
-		// Wait 10 seconds but check for existing peer every 500ms
-		for i := 0; i < 20; i++ { // 20 * 500ms = 10 seconds
-			time.Sleep(500 * time.Millisecond)
-
-			// Check if someone already connected to us
-			if existingPeer := getPeerAddress(); existingPeer != "" {
-				LogInfo("Already connected to peer: " + existingPeer)
-				return existingPeer
+			peer := net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", p))
+			if IsPeerDiscoverable(peer) {
+				mu.Lock()
+				discoveredPeers = append(discoveredPeers, peer)
+				mu.Unlock()
 			}
-		}
+
+			if localIP == "" {
+				LogWarning("Local IP not found, skipping subnet scan")
+				return
+			}
+
+			discoveredPeersFromSubnet := ScanSubnetForPeer(localIP, p)
+			mu.Lock()
+			discoveredPeers = append(discoveredPeers, discoveredPeersFromSubnet...)
+			mu.Unlock()
+		}(port)
 	}
+
+	wg.Wait() // wait for all goroutines
+	return discoveredPeers
 }
 
-// ExtractPortFromDiscoverMessage extracts port from "DISCOVER <port>" message
-func ExtractPortFromDiscoverMessage(message string) string {
-	parts := strings.Split(message, " ")
-	if len(parts) >= 2 {
-		return parts[1]
+func TryToConnectToPeer(peer string, myPort int) bool {
+	conn, err := net.DialTimeout("tcp", peer, 1*time.Second)
+	if err != nil {
+		return false
 	}
-	return ""
-}
+	defer conn.Close()
 
-// GetIPFromRemoteAddr extracts IP from remote address string
-func GetIPFromRemoteAddr(remoteAddr string) string {
-	return strings.Split(remoteAddr, ":")[0]
+	// Send discovery message
+	_, err = conn.Write([]byte("CONNECT_REQ:" + GetLocalIP() + ":" + strconv.Itoa(myPort)))
+	if err != nil {
+		return false
+	}
+
+	// Read response
+	buffer := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err := conn.Read(buffer)
+	if err != nil {
+		return false
+	}
+
+	return string(buffer[:n]) == "CONNECT_OK"
 }

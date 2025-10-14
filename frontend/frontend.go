@@ -3,14 +3,15 @@ package frontend
 import (
 	"encoding/json"
 	"fmt"
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/layout"
 	"image/color"
 	"log"
 	"os"
 	"sync"
 	_ "time"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/layout"
 
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
@@ -24,11 +25,15 @@ var (
 	fastSend, dynamicSend, slowSend uint
 	darkMode                        = true
 	connected                       bool
+	DiscoveredPeers                 []string
 	windowMutex                     sync.RWMutex
 	messageChannel                  chan string
+	signalChan                      chan string
 	shutdownChan                    chan bool
 
 	fastLabel, dynamicLabel, slowLabel *widget.Label
+	peersButtonsContainer              *fyne.Container
+	peersButtonsMap                    = map[string]*widget.Button{} // peer -> button
 	fastBar, dynamicBar, slowBar       *widget.ProgressBar
 	connectionLED                      *fyne.Container
 	ledCircle                          *canvas.Circle
@@ -39,14 +44,17 @@ var (
 
 // QueueState represents the state of all queues received from backend
 type QueueState struct {
-	FastQueue    uint `json:"fast"`
-	DynamicQueue uint `json:"dynamic"`
-	SlowQueue    uint `json:"slow"`
-	Connected    bool `json:"connected"`
+	FastQueue       uint     `json:"fast"`
+	DynamicQueue    uint     `json:"dynamic"`
+	SlowQueue       uint     `json:"slow"`
+	Connected       bool     `json:"connected"`
+	DiscoveredPeers []string `json:"discovered_peers"`
 }
 
-func SetupGUI(msgChan chan string) {
+func SetupGUI(msgChan chan string, sgnChan chan string) {
 	messageChannel = msgChan
+	signalChan = sgnChan
+
 	shutdownChan = make(chan bool, 1)
 
 	defer func() {
@@ -88,6 +96,7 @@ func initializeUIElements() {
 	fastLabel = widget.NewLabel("Length: 0")
 	dynamicLabel = widget.NewLabel("Length: 0")
 	slowLabel = widget.NewLabel("Length: 0")
+	peersButtonsContainer = container.NewVBox()
 
 	fastBar = widget.NewProgressBar()
 	fastBar.SetValue(0)
@@ -165,6 +174,8 @@ func createLayout() *fyne.Container {
 		widget.NewSeparator(),
 		widget.NewLabel(""),
 		queuesContainer,
+		widget.NewLabel("Discovered Peers:"),
+		peersButtonsContainer, // add buttons container here
 	)
 
 	return container.NewPadded(main)
@@ -199,6 +210,7 @@ func updateUI(state QueueState) {
 	dynamicSend = state.DynamicQueue
 	slowSend = state.SlowQueue
 	connected = state.Connected
+	DiscoveredPeers = state.DiscoveredPeers
 
 	fastLabel.SetText(fmt.Sprintf("Length: %d", fastSend))
 	dynamicLabel.SetText(fmt.Sprintf("Length: %d", dynamicSend))
@@ -211,6 +223,30 @@ func updateUI(state QueueState) {
 
 	connected = state.Connected
 	updateLEDColor(connected)
+
+	// --- Update dynamic buttons without losing hover ---
+	currentPeers := map[string]struct{}{}
+	for _, peer := range DiscoveredPeers {
+		currentPeers[peer] = struct{}{}
+		if _, exists := peersButtonsMap[peer]; !exists {
+			peerCopy := peer
+			btn := widget.NewButton(peerCopy, func() {
+				sendConnectSignalToBackend(peerCopy)
+			})
+			peersButtonsMap[peer] = btn
+			peersButtonsContainer.Add(btn)
+		}
+	}
+
+	// Remove buttons that are no longer in DiscoveredPeers
+	for peer, btn := range peersButtonsMap {
+		if _, stillExists := currentPeers[peer]; !stillExists {
+			peersButtonsContainer.Remove(btn)
+			delete(peersButtonsMap, peer)
+		}
+	}
+
+	peersButtonsContainer.Refresh()
 }
 
 func toggleDarkMode() {
@@ -223,4 +259,9 @@ func toggleDarkMode() {
 		window.Settings().SetTheme(theme.LightTheme())
 		darkModeButton.SetText("☀️")
 	}
+}
+
+// I need the address in the format of "IP:PORT"
+func sendConnectSignalToBackend(address string) {
+	signalChan <- address
 }

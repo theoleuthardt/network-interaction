@@ -17,47 +17,66 @@ var (
 	serverPort  int
 	peerAddress string
 	connected   = false
+	// A list of all discovered potential peers
+	discoveredPeers []string
 )
 
 type QueueState struct {
-	FastQueue    uint `json:"fast"`
-	DynamicQueue uint `json:"dynamic"`
-	SlowQueue    uint `json:"slow"`
-	Connected    bool `json:"connected"`
+	FastQueue       uint     `json:"fast"`
+	DynamicQueue    uint     `json:"dynamic"`
+	SlowQueue       uint     `json:"slow"`
+	Connected       bool     `json:"connected"`
+	DiscoveredPeers []string `json:"discovered_peers"`
 }
 
 // SetupServer starts the server and peer discovery
-func SetupServer(messageChan chan string) {
+func SetupServer(messageChan chan string, sgnChan chan string) {
 	// Find available port for server
 	serverPort = utils.FindAvailablePort(50500, 50600)
 	utils.LogInfo(fmt.Sprintf("Starting server on port %d", serverPort))
 
 	// Start TCP server
-	go startTCPServer(messageChan)
-
-	// Start peer discovery
-	func() {
-		portRange := make([]int, 0, 100)
-		for port := 50500; port < 50600; port++ {
-			portRange = append(portRange, port)
+	go startTCPServer()
+	// Start queue management
+	go sendQueueStatePeriodically(messageChan, 100*time.Millisecond)
+	// Listen to the messages from the frontend
+	go func() {
+		for data := range sgnChan {
+			if utils.TryToConnectToPeer(data, serverPort) {
+				peerAddress = data
+				connected = true
+			}
 		}
-		peerAddress = utils.DiscoverPeers(serverPort, portRange, func() string { return peerAddress })
-		if peerAddress != "" {
-			connected = true
-		}
-		utils.LogInfo("Peer discovery complete, connected to: " + peerAddress)
 	}()
 
-	// Start message senders
-	utils.StartMessageSenders(func() string { return peerAddress })
+	// Start peer discovery
+	go func() {
+		for {
+			for connected {
+				discoveredPeers = []string{}
+				time.Sleep(500 * time.Millisecond)
+			}
 
-	// Start connection monitoring
-	go monitorConnection()
+			portRange := make([]int, 0, 100)
+			for port := 50500; port < 50600; port++ {
+				portRange = append(portRange, port)
+			}
+			discoveredPeers = utils.DiscoverPeers(serverPort, portRange)
+			utils.LogInfo(fmt.Sprintf("Discovered peers: %v", discoveredPeers))
 
-	// Start queue management
-	sendQueueState(messageChan)
+			// Wait 2.5 seconds until next discovery (or until connected)
+			for i := 0; i < 10; i++ {
+				if connected {
+					break
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
+		}
+	}()
+
 	go countdownQueues()
-	go sendQueueStatePeriodically(messageChan, 100*time.Millisecond)
+	go monitorConnection()
+	utils.StartMessageSenders(func() string { return peerAddress })
 }
 
 func monitorConnection() {
@@ -85,7 +104,7 @@ func monitorConnection() {
 }
 
 // Start TCP server
-func startTCPServer(messageChan chan string) {
+func startTCPServer() {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", serverPort))
 	if err != nil {
 		utils.LogError("Failed to start server: " + err.Error())
@@ -98,12 +117,12 @@ func startTCPServer(messageChan chan string) {
 		if err != nil {
 			continue
 		}
-		go handleConnection(conn, messageChan)
+		go handleConnection(conn)
 	}
 }
 
 // Handle incoming TCP connections
-func handleConnection(conn net.Conn, messageChan chan string) {
+func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	buffer := make([]byte, 1024)
@@ -113,22 +132,28 @@ func handleConnection(conn net.Conn, messageChan chan string) {
 	}
 
 	message := string(buffer[:n])
-
 	// Handle discovery requests
-	if strings.HasPrefix(message, "DISCOVER ") {
+	if strings.HasPrefix(message, "DISCOVER_SYN") {
+		if peerAddress != "" {
+			return // Already connected
+		}
+		conn.Write([]byte("DISCOVER_ACK"))
+		return
+	}
+
+	if strings.HasPrefix(message, "CONNECT_REQ") {
 		if peerAddress != "" {
 			return // Already connected
 		}
 
-		conn.Write([]byte("PEER_RESPONSE"))
+		parts := strings.Split(message, ":")
+		address := parts[1]
+		port := parts[2]
+		peerAddress = fmt.Sprintf("%s:%s", address, port)
+		connected = true
 
-		// Extract port and set peer address
-		if port := utils.ExtractPortFromDiscoverMessage(message); port != "" {
-			ip := utils.GetIPFromRemoteAddr(conn.RemoteAddr().String())
-			peerAddress = net.JoinHostPort(ip, port)
-			connected = true
-			utils.LogInfo("Accepted peer: " + peerAddress)
-		}
+		conn.Write([]byte("CONNECT_OK"))
+		utils.LogInfo("Connected to peer: " + peerAddress)
 		return
 	}
 
@@ -146,6 +171,12 @@ func handleConnection(conn net.Conn, messageChan chan string) {
 func countdownQueues() {
 	for {
 		time.Sleep(1 * time.Second)
+		if !connected {
+			fastQueue = 50
+			dynamicQueue = 50
+			slowQueue = 50
+			continue
+		}
 
 		if fastQueue > 100 {
 			fastQueue = 0
@@ -173,17 +204,18 @@ func countdownQueues() {
 func sendQueueStatePeriodically(messageChan chan string, interval time.Duration) {
 	for {
 		time.Sleep(interval)
-		sendQueueState(messageChan)
+		sendDataToFrontend(messageChan)
 	}
 }
 
 // Send queue state to frontend
-func sendQueueState(messageChan chan string) {
+func sendDataToFrontend(messageChan chan string) {
 	state := QueueState{
-		FastQueue:    fastQueue,
-		DynamicQueue: dynamicQueue,
-		SlowQueue:    slowQueue,
-		Connected:    connected,
+		FastQueue:       fastQueue,
+		DynamicQueue:    dynamicQueue,
+		SlowQueue:       slowQueue,
+		Connected:       connected,
+		DiscoveredPeers: discoveredPeers,
 	}
 
 	data, err := json.Marshal(state)
