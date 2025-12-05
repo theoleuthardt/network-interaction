@@ -38,6 +38,7 @@ var (
 	connectionLED                      *fyne.Container
 	ledCircle                          *canvas.Circle
 	darkModeButton                     *widget.Button
+	disconnectButton                   *widget.Button
 	window                             fyne.App
 	mainWindow                         fyne.Window
 )
@@ -88,8 +89,8 @@ func runFyneApp() {
 	}
 
 	mainWindow = window.NewWindow("Network Interaction")
-	mainWindow.SetFixedSize(true)
-	mainWindow.Resize(fyne.NewSize(600, 300))
+	mainWindow.SetFixedSize(false)
+	mainWindow.Resize(fyne.NewSize(700, 600))
 
 	initializeUIElements()
 	content := createLayout()
@@ -105,7 +106,7 @@ func initializeUIElements() {
 	fastLabel = widget.NewLabel("Length: 0")
 	dynamicLabel = widget.NewLabel("Length: 0")
 	slowLabel = widget.NewLabel("Length: 0")
-	peersButtonsContainer = container.NewVBox()
+	peersButtonsContainer = container.New(layout.NewGridWrapLayout(fyne.NewSize(200, 40)))
 
 	fastBar = widget.NewProgressBar()
 	fastBar.SetValue(0)
@@ -129,6 +130,12 @@ func initializeUIElements() {
 	if !darkMode {
 		darkModeButton.SetText("☀️")
 	}
+
+	disconnectButton = widget.NewButton("Disconnect", func() {
+		signalChan <- "disconnect"
+	})
+	disconnectButton.Importance = widget.DangerImportance
+	disconnectButton.Hide()
 }
 
 // updateLEDColor updates the connection status LED indicator.
@@ -154,6 +161,7 @@ func createLayout() *fyne.Container {
 	headerRight := container.NewHBox(
 		widget.NewLabel("Connection Status:"),
 		sizedLEDContainer,
+		disconnectButton,
 		widget.NewSeparator(),
 		darkModeButton,
 	)
@@ -182,13 +190,25 @@ func createLayout() *fyne.Container {
 		layout.NewSpacer(),
 	)
 
+	peersTitle := widget.NewLabel("Discovered Peers")
+	peersTitle.TextStyle = fyne.TextStyle{Bold: true}
+
+	peersScroll := container.NewVScroll(peersButtonsContainer)
+	peersScroll.SetMinSize(fyne.NewSize(0, 150))
+
+	peersCard := container.NewBorder(
+		container.NewVBox(peersTitle, widget.NewSeparator()),
+		nil, nil, nil,
+		peersScroll,
+	)
+
 	main := container.NewVBox(
 		header,
 		widget.NewSeparator(),
 		widget.NewLabel(""),
 		queuesContainer,
-		widget.NewLabel("Discovered Peers:"),
-		peersButtonsContainer,
+		widget.NewSeparator(),
+		peersCard,
 	)
 
 	return container.NewPadded(main)
@@ -243,14 +263,21 @@ func updateUI(state QueueState) {
 	connected = state.Connected
 	updateLEDColor(connected)
 
+	if connected {
+		disconnectButton.Show()
+	} else {
+		disconnectButton.Hide()
+	}
+
 	currentPeers := map[string]struct{}{}
 	for _, peer := range DiscoveredPeers {
 		currentPeers[peer] = struct{}{}
 		if _, exists := peersButtonsMap[peer]; !exists {
 			peerCopy := peer
-			btn := widget.NewButton(peerCopy, func() {
+			btn := widget.NewButtonWithIcon("  "+peerCopy, theme.ComputerIcon(), func() {
 				sendConnectSignalToBackend(peerCopy)
 			})
+			btn.Importance = widget.HighImportance
 			peersButtonsMap[peer] = btn
 			peersButtonsContainer.Add(btn)
 		}

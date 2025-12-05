@@ -42,7 +42,19 @@ func SetupServer(messageChan chan string, sgnChan chan string) {
 	// Listen to the messages from the frontend
 	go func() {
 		for data := range sgnChan {
-			if utils.TryToConnectToPeer(data, serverPort) {
+			if data == "disconnect" {
+				utils.LogInfo("Disconnecting from peer: " + peerAddress)
+				// Notify the peer before disconnecting
+				if peerAddress != "" {
+					conn, err := net.DialTimeout("tcp", peerAddress, 2*time.Second)
+					if err == nil {
+						conn.Write([]byte("DISCONNECT"))
+						conn.Close()
+					}
+				}
+				peerAddress = ""
+				connected = false
+			} else if utils.TryToConnectToPeer(data, serverPort) {
 				peerAddress = data
 				connected = true
 			}
@@ -154,6 +166,13 @@ func handleConnection(conn net.Conn) {
 
 		conn.Write([]byte("CONNECT_OK"))
 		utils.LogInfo("Connected to peer: " + peerAddress)
+		return
+	}
+
+	if strings.HasPrefix(message, "DISCONNECT") {
+		utils.LogInfo("Peer disconnected: " + peerAddress)
+		peerAddress = ""
+		connected = false
 		return
 	}
 
