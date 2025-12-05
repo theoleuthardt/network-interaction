@@ -33,7 +33,7 @@ var (
 
 	fastLabel, dynamicLabel, slowLabel *widget.Label
 	peersButtonsContainer              *fyne.Container
-	peersButtonsMap                    = map[string]*widget.Button{} // peer -> button
+	peersButtonsMap                    = map[string]*widget.Button{}
 	fastBar, dynamicBar, slowBar       *widget.ProgressBar
 	connectionLED                      *fyne.Container
 	ledCircle                          *canvas.Circle
@@ -42,7 +42,8 @@ var (
 	mainWindow                         fyne.Window
 )
 
-// QueueState represents the state of all queues received from backend
+// QueueState represents the backend's message queue state and network information.
+// It contains queue lengths, connection status, and a list of discovered peers.
 type QueueState struct {
 	FastQueue       uint     `json:"fast"`
 	DynamicQueue    uint     `json:"dynamic"`
@@ -51,6 +52,9 @@ type QueueState struct {
 	DiscoveredPeers []string `json:"discovered_peers"`
 }
 
+// SetupGUI initializes and starts the graphical user interface.
+// It accepts message and signal channels for communication with the backend,
+// sets up panic recovery, and launches the Fyne application.
 func SetupGUI(msgChan chan string, sgnChan chan string) {
 	messageChannel = msgChan
 	signalChan = sgnChan
@@ -69,6 +73,9 @@ func SetupGUI(msgChan chan string, sgnChan chan string) {
 	runFyneApp()
 }
 
+// runFyneApp creates and configures the main application window.
+// It sets up the theme, window size, initializes UI elements, and starts
+// the message handler goroutine before showing the window.
 func runFyneApp() {
 	os.Setenv("FYNE_SCALE", "1.3")
 	window = app.New()
@@ -92,6 +99,8 @@ func runFyneApp() {
 	mainWindow.ShowAndRun()
 }
 
+// initializeUIElements creates and configures all UI components including
+// labels, progress bars, the connection LED indicator, and the dark mode button.
 func initializeUIElements() {
 	fastLabel = widget.NewLabel("Length: 0")
 	dynamicLabel = widget.NewLabel("Length: 0")
@@ -122,6 +131,8 @@ func initializeUIElements() {
 	}
 }
 
+// updateLEDColor updates the connection status LED indicator.
+// Sets the LED to green when connected, red when disconnected.
 func updateLEDColor(connected bool) {
 	if connected {
 		ledCircle.FillColor = color.RGBA{G: 255, A: 255}
@@ -131,6 +142,8 @@ func updateLEDColor(connected bool) {
 	ledCircle.Refresh()
 }
 
+// createLayout constructs the main window layout with header, queue visualizations,
+// and the discovered peers section. Returns a padded container with all UI elements.
 func createLayout() *fyne.Container {
 	title := widget.NewLabel("Buffer Queue Visualisation")
 	title.TextStyle = fyne.TextStyle{Bold: true}
@@ -175,12 +188,15 @@ func createLayout() *fyne.Container {
 		widget.NewLabel(""),
 		queuesContainer,
 		widget.NewLabel("Discovered Peers:"),
-		peersButtonsContainer, // add buttons container here
+		peersButtonsContainer,
 	)
 
 	return container.NewPadded(main)
 }
 
+// messageHandler listens for queue state updates from the backend channel.
+// Deserializes JSON messages and updates the UI on the main thread using fyne.Do.
+// Includes panic recovery to prevent crashes from malformed messages.
 func messageHandler() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -202,6 +218,9 @@ func messageHandler() {
 	}
 }
 
+// updateUI synchronizes the UI with the provided queue state from the backend.
+// Updates queue lengths, progress bars, connection status, and manages the dynamic
+// peer button list. Also refreshes the discovery window if open.
 func updateUI(state QueueState) {
 	windowMutex.Lock()
 	defer windowMutex.Unlock()
@@ -224,7 +243,6 @@ func updateUI(state QueueState) {
 	connected = state.Connected
 	updateLEDColor(connected)
 
-	// --- Update dynamic buttons without losing hover ---
 	currentPeers := map[string]struct{}{}
 	for _, peer := range DiscoveredPeers {
 		currentPeers[peer] = struct{}{}
@@ -238,7 +256,6 @@ func updateUI(state QueueState) {
 		}
 	}
 
-	// Remove buttons that are no longer in DiscoveredPeers
 	for peer, btn := range peersButtonsMap {
 		if _, stillExists := currentPeers[peer]; !stillExists {
 			peersButtonsContainer.Remove(btn)
@@ -249,6 +266,8 @@ func updateUI(state QueueState) {
 	peersButtonsContainer.Refresh()
 }
 
+// toggleDarkMode switches between dark and light themes.
+// Updates the application theme and the dark mode button icon.
 func toggleDarkMode() {
 	darkMode = !darkMode
 
@@ -261,7 +280,8 @@ func toggleDarkMode() {
 	}
 }
 
-// I need the address in the format of "IP:PORT"
+// sendConnectSignalToBackend sends a peer connection request to the backend.
+// The address parameter should be in "IP:PORT" format.
 func sendConnectSignalToBackend(address string) {
 	signalChan <- address
 }
