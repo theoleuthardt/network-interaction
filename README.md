@@ -33,7 +33,7 @@ sending/receiving packets via a TCP connection.
 If you want to build the project yourself, install the following dependencies:
 
 ```bash
-sudo apt install libvulkan-dev libxkbcommon-x11-dev libx11-xcb-dev libegl1-mesa-dev libwayland-dev libx11-dev libxcursor-dev libxfixes-dev pkg-config
+sudo apt install libvulkan-dev libxkbcommon-x11-dev libx11-xcb-dev libegl1-mesa-dev libwayland-dev libx11-dev libxcursor-dev libxfixes-dev pkg-config libxcursor-dev libxinerama-dev libxrandr-dev libxi-dev libgl-dev
 ```
 
 ## Installation

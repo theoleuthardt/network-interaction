@@ -8,6 +8,8 @@ import (
 func main() {
 	messageChan := make(chan string)
 
-	go backend.SetupServer(messageChan)
-	frontend.SetupGUI(messageChan)
+	signalChan := make(chan string)
+
+	go backend.SetupServer(messageChan, signalChan)
+	frontend.SetupGUI(messageChan, signalChan)
 }

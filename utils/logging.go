@@ -21,15 +21,3 @@ func LogWarning(message string) {
 func LogInfo(message string) {
 	fmt.Println(color.WhiteString("[INFO] %s", message))
 }
-
-func printTestLogs() {
-	LogError("This is an error log example.")
-	LogCritical("This is a critical log example.")
-	LogWarning("This is a warning log example.")
-	LogInfo("This is an informational log example.")
-	fmt.Println()
-}
-
-func main() {
-	printTestLogs()
-}
